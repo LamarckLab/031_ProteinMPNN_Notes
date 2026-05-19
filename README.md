@@ -17,6 +17,7 @@
 | :--- | :--- |
 | [ProteinMPNN_Setup.md](./ProteinMPNN_Setup.md) | 克隆源码、conda 环境创建、PyTorch 与 NumPy 安装 |
 | [ProteinMPNN_Functions.md](./ProteinMPNN_Functions.md) | 9 个推理示例：基础设计 / 复合物 & 残基约束 / 对称性 / 概率与偏置 |
+| [ProteinMPNN_Fasta_Format.md](./ProteinMPNN_Fasta_Format.md) | 输出 .fa 文件的字段含义（score / seq_recovery / model_name 等）|
 | [inputs/](./inputs/) | 9 个示例的输入 PDB 文件，按 sample 分组 |
 
 ---

@@ -39,7 +39,7 @@ python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py --input_pat
 python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
         --jsonl_path $path_for_parsed_chains \
         --out_folder $output_dir \
-        --num_seq_per_target 2 \
+        --num_seq_per_target 5 \
         --sampling_temp "0.1" \
         --seed 37 \
         --batch_size 1
