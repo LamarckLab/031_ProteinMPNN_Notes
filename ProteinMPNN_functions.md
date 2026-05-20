@@ -141,7 +141,7 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **05 tied positions：绑定等价位点**
+> **05 绑定多条链的对应位点**
 
 **输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
 **功能**：把多条链的对应位点绑定，强制它们设计成相同氨基酸
@@ -168,11 +168,12 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **06 同源寡聚体 homooligomer -- |同源多聚体|全链对称|--homooligomer 1|**
+> **06 同源寡聚体设计**
 
-**输入**：`mpnn_inputs/` 放同源多聚体 PDB（如 4GYT.pdb、6EHB.pdb）；**功能**：自动绑定所有链的对应位点，得到各链序列完全相同的同源寡聚体
+**输入**：`mpnn_inputs/` 放同源多聚体 PDB（如 4GYT.pdb、6EHB.pdb）  
+**功能**：自动绑定所有链的对应位点，得到各链序列完全相同的同源寡聚体
 
-对同源寡聚体（各链等长、序列应一致），`make_tied_positions_dict.py` 加 `--homooligomer 1` 自动把所有链对应位点全部绑定，输出里每条链序列完全相同
+同源寡聚体的各链等长、序列应一致，`make_tied_positions_dict.py` 加 `--homooligomer 1` 自动把所有链对应位点全部绑定，输出里每条链序列完全相同
 ```bash
 python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
   --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
@@ -193,12 +194,17 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **07 骨架噪声 backbone noise -- |单体|坐标加噪|--backbone_noise|**
+> **07 设置骨架噪声**
 
-**输入**：同 01（复用 `mpnn_outputs/parsed_pdbs.jsonl`，单体骨架）；**功能**：设计前给骨架坐标加高斯噪声，增加序列多样性、对粗糙骨架更鲁棒
+**输入**：此处直接复用 01 的 5L33.pdb、6MRR.pdb
+**功能**：设计前给骨架坐标加高斯噪声，增加序列多样性
 
-run 时加 `--backbone_noise 0.10`（单位 Å），打分/采样前给骨架坐标加高斯噪声，提升多样性、对粗糙骨架更鲁棒（直接复用 01 的 parsed_pdbs.jsonl）
+run 时加 `--backbone_noise 0.10`（单位 Å），注意这里的噪声是指的推理的骨架噪声，训练时默认是有噪声的（比如 v_48_020 有 0.2 的训练噪声）
 ```bash
+python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl
+
 python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
   --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
