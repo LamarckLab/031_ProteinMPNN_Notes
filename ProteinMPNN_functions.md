@@ -215,12 +215,17 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --backbone_noise 0.10
 ```
 
-> **08 氨基酸全局偏置 bias AA -- |单体|偏好/抑制特定 AA|--bias_AA_jsonl|**
+> **08 氨基酸偏好性设置**
 
-**输入**：同 01（单体骨架）；**功能**：在全局层面调整各氨基酸被选中的概率（这里整体偏好极性残基）
+**输入**：此处直接复用 01 的 5L33.pdb、6MRR.pdb 
+**功能**：在全局层面调整氨基酸偏好性
 
-`make_bias_AA.py` 生成全局偏置表（log 空间，正值偏好 / 负值抑制），run 时用 `--bias_AA_jsonl`。下例整体偏向极性氨基酸
+`make_bias_AA.py` 生成全局偏置表（log 空间，正值偏好 / 负值抑制），run 时用 `--bias_AA_jsonl`，下例整体偏向极性氨基酸
 ```bash
+python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl
+
 python /data/lmk/ProteinMPNN/helper_scripts/make_bias_AA.py \
   --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/bias_AA.jsonl \
   --AA_list="D E H K N Q R S T W Y" \
