@@ -27,7 +27,7 @@ export CUDA_VISIBLE_DEVICES=3
 
 ### 一、核心设计流程
 
-> **01 基础单体设计**
+> **01 简单单体设计**
 
 **输入**：`mpnn_inputs/` 放单体 PDB（如 5L33.pdb、6MRR.pdb）  
 **功能**：不加任何约束，固定骨架对整条链从头设计序列，每个骨架输出 5 条候选
@@ -45,7 +45,7 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **02 设计复合物的指定链**
+> **02 多链复合物 -- 指定设计链**
 
 **输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
 **功能**：只重新设计多链复合物里的 A、B 链，其余链保持原序列作为固定环境
@@ -71,7 +71,7 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **03 设计时锁住指定残基位点**
+> **03 固定特定残基 -- 部分残基不参与设计**
 
 **输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
 **功能**：在设计链上锁住指定残基（如关键活性位点），其余位置重新设计
@@ -107,7 +107,7 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **04 只设计指定位点**
+> **04 仅设计特定残基 -- 反向约束**
 
 **输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
 **功能**：与 03 相反，只重设计列出的少数位点，其余全部保持原样
@@ -141,7 +141,7 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **05 绑定多条链的对应位点**
+> **05 自定义残基绑定 -- tied_positions 协同设计**
 
 **输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
 **功能**：把多条链的对应位点绑定，强制它们设计成相同氨基酸
@@ -168,7 +168,7 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **06 同源寡聚体设计**
+> **06 同源寡聚体 -- C2/C3/C4 对称设计**
 
 **输入**：`mpnn_inputs/` 放同源多聚体 PDB（如 4GYT.pdb、6EHB.pdb）  
 **功能**：自动绑定所有链的对应位点，得到各链序列完全相同的同源寡聚体
@@ -215,7 +215,7 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --backbone_noise 0.10
 ```
 
-> **08 氨基酸偏好性设置**
+> **08 氨基酸偏置 -- 鼓励或抑制特定氨基酸残基**
 
 **输入**：此处直接复用 01 的 5L33.pdb、6MRR.pdb 
 **功能**：在全局层面调整氨基酸偏好性
