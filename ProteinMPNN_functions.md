@@ -1,5 +1,5 @@
 ## Lamarck &nbsp; &nbsp; &nbsp; 2025-10-30
-#### 该文档用于记录 server 上跑 ProteinMPNN 的各种命令
+#### 该文档用于记录 server 上跑 ProteinMPNN 的命令
 ---
 
 *环境 & 路径*
@@ -13,7 +13,6 @@
 输入目录: /data/lmk/ProteinMPNN/mpnn_inputs    # 存放每次运行用的 PDB
 输出目录: /data/lmk/ProteinMPNN/mpnn_outputs   # 解析得到的 jsonl 和生成的 FASTA
 ```
-9 个示例的样例 PDB 按 sample 分组放在仓库的 [inputs/](./inputs/) 目录下，跑某 sample 前先把对应文件传到 server 的 mpnn_inputs/ 即可
 
 *GPU选择*
 ```bash
@@ -21,248 +20,361 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export CUDA_VISIBLE_DEVICES=3
 ```
 
----
-
-### 01 Basic Design -- 基础设计
-
-> **01.1 简单单体设计 -- 标准 jsonl 工作流**
-
-最基础的入门脚本，先用 `parse_multiple_chains.py` 把 PDB 解析成 `parsed_pdbs.jsonl` (记录链 ID、残基编号、坐标/掩码等元数据)，再喂给 `protein_mpnn_run.py`
-```bash
-folder_with_pdbs="/data/lmk/ProteinMPNN/mpnn_inputs/"
-output_dir="/data/lmk/ProteinMPNN/mpnn_outputs"
-
-path_for_parsed_chains=$output_dir"/parsed_pdbs.jsonl"
-
-python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
-
-python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
-        --jsonl_path $path_for_parsed_chains \
-        --out_folder $output_dir \
-        --num_seq_per_target 5 \
-        --sampling_temp "0.1" \
-        --seed 37 \
-        --batch_size 1
-```
-
-> **01.2 直接 PDB 路径输入 -- 跳过 jsonl 预解析**
-
-不需要先生成 `.jsonl`，可以直接指定 PDB 文件路径运行，方便快速测试单个 PDB
-```bash
-path_to_PDB="/data/lmk/ProteinMPNN/mpnn_inputs/3HTN.pdb"
-output_dir="/data/lmk/ProteinMPNN/mpnn_outputs"
-
-chains_to_design="A B"
-
-python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
-        --pdb_path $path_to_PDB \
-        --pdb_path_chains "$chains_to_design" \
-        --out_folder $output_dir \
-        --num_seq_per_target 2 \
-        --sampling_temp "0.1" \
-        --seed 37 \
-        --batch_size 1
-```
+> [!NOTE]
+> 除「单 PDB 直接输入」(18) 外，所有功能都要先用 `parse_multiple_chains.py` 把一个文件夹里的 PDB 解析成 `parsed_pdbs.jsonl`，再喂给 `protein_mpnn_run.py --jsonl_path`。固定链 / 固定位点 / 绑定位点 / 偏置等额外约束都是先用对应 helper 脚本生成一个 `.jsonl`，再用相应 flag 传进去。所有命令统一用 `mpnn_inputs` / `mpnn_outputs` 一对固定目录，换功能时只需替换 `mpnn_inputs` 里的 PDB 再复跑（同名产物会被覆盖）。下面每个例子都在统一基线 `--num_seq_per_target 5 --sampling_temp "0.1" --seed 37 --batch_size 1` 上只改它要演示的那一项。
 
 ---
 
-### 02 Complex & Residue Constraints -- 复合物与残基约束
+### 一、核心设计流程
 
-> **02.1 多链复合物 -- 指定设计链**
+> **01 基础单体设计 -- |单体|全链重设计|默认参数|**
 
-抗原-抗体、受体-配体等多链复合物，用 `assign_fixed_chains.py` 生成 `assigned_pdbs.jsonl`，在 parsed 基础上写入"哪些链设计、哪些链固定"的分配信息
+**输入**：`mpnn_inputs/` 放单体 PDB（如 5L33.pdb、6MRR.pdb）  
+**功能**：不加任何约束，固定骨架对整条链从头设计序列，每个骨架输出 5 条候选
 ```bash
-folder_with_pdbs="/data/lmk/ProteinMPNN/mpnn_inputs/"
-output_dir="/data/lmk/ProteinMPNN/mpnn_outputs"
-
-path_for_parsed_chains=$output_dir"/parsed_pdbs.jsonl"
-path_for_assigned_chains=$output_dir"/assigned_pdbs.jsonl"
-
-chains_to_design="A B"  # 表示把链A和B作为待设计链，其余链自动视作固定链
-
-python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
-python /data/lmk/ProteinMPNN/helper_scripts/assign_fixed_chains.py --input_path=$path_for_parsed_chains --output_path=$path_for_assigned_chains --chain_list "$chains_to_design"
+python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl
 
 python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
-        --jsonl_path $path_for_parsed_chains \
-        --chain_id_jsonl $path_for_assigned_chains \
-        --out_folder $output_dir \
-        --num_seq_per_target 2 \
-        --sampling_temp "0.1" \
-        --seed 37 \
-        --batch_size 1
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1
 ```
 
-> **02.2 固定特定残基 -- 部分残基不参与设计**
+> **02 复合物：只设计指定链 -- |复合物|设计 A/B|固定其余链|**
 
-固定活性位点、金属配位残基、抗原表位等。用 `make_fixed_positions_dict.py` 生成 `fixed_pdbs.jsonl`，指定哪些残基位置需要固定 (即不被设计)
+**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb、4YOW.pdb）；  
+**功能**：多链复合物里只重设计 A、B 链，其余链保持原序列作为固定环境
+
+加 `assign_fixed_chains.py` 生成 `assigned_pdbs.jsonl` 标记哪些链参与设计，run 时用 `--chain_id_jsonl` 传入。下例只设计 A、B 链，其余链保持原序列
 ```bash
-folder_with_pdbs="/data/lmk/ProteinMPNN/mpnn_inputs/"
-output_dir="/data/lmk/ProteinMPNN/mpnn_outputs"
+python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl
 
-path_for_parsed_chains=$output_dir"/parsed_pdbs.jsonl"
-path_for_assigned_chains=$output_dir"/assigned_pdbs.jsonl"
-path_for_fixed_positions=$output_dir"/fixed_pdbs.jsonl"
-
-chains_to_design="A C"
-
-fixed_positions="1 2 3 4 5 6 7 8 23 25, 10 11 12 13 14 15 16 17 18 19 20 40"  # 这里的序号是严格的残基排序，而不是pdb中的残基index
-
-python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
-python /data/lmk/ProteinMPNN/helper_scripts/assign_fixed_chains.py --input_path=$path_for_parsed_chains --output_path=$path_for_assigned_chains --chain_list "$chains_to_design"
-python /data/lmk/ProteinMPNN/helper_scripts/make_fixed_positions_dict.py --input_path=$path_for_parsed_chains --output_path=$path_for_fixed_positions --chain_list "$chains_to_design" --position_list "$fixed_positions"
+python /data/lmk/ProteinMPNN/helper_scripts/assign_fixed_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/assigned_pdbs.jsonl \
+  --chain_list "A B"
 
 python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
-        --jsonl_path $path_for_parsed_chains \
-        --chain_id_jsonl $path_for_assigned_chains \
-        --fixed_positions_jsonl $path_for_fixed_positions \
-        --out_folder $output_dir \
-        --num_seq_per_target 2 \
-        --sampling_temp "0.1" \
-        --seed 37 \
-        --batch_size 1
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --chain_id_jsonl /data/lmk/ProteinMPNN/mpnn_outputs/assigned_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1
 ```
 
-> **02.3 仅设计特定残基 -- 反向约束**
+> **03 固定指定残基位点 -- |复合物|设计 A/C|锁定部分残基|**
 
-与上一例相反，加 `--specify_non_fixed` 让指定的残基可被设计、其余全部保持固定，常用于探索性突变扫描
+**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb、4YOW.pdb）；**功能**：在设计链上锁住指定残基（如关键活性位点），其余位置重新设计
+
+`make_fixed_positions_dict.py` 生成 `fixed_pdbs.jsonl`，把列出的残基号锁住（保持原样，其余设计），run 时用 `--fixed_positions_jsonl`。`--position_list` 中链间用逗号分隔、链内位点用空格。下例：A 链锁 1-8/23/25，C 链锁 10-20/40
 ```bash
-folder_with_pdbs="/data/lmk/ProteinMPNN/mpnn_inputs/"
-output_dir="/data/lmk/ProteinMPNN/mpnn_outputs"
+python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl
 
-path_for_parsed_chains=$output_dir"/parsed_pdbs.jsonl"
-path_for_assigned_chains=$output_dir"/assigned_pdbs.jsonl"
-path_for_fixed_positions=$output_dir"/fixed_pdbs.jsonl"
+python /data/lmk/ProteinMPNN/helper_scripts/assign_fixed_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/assigned_pdbs.jsonl \
+  --chain_list "A C"
 
-chains_to_design="A C"
-
-design_only_positions="1 2 3 4 5 6 7 8 9 10, 3 4 5 6 7 8"  # 这里的序号是严格的残基排序，而不是pdb中的残基index
-
-python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
-python /data/lmk/ProteinMPNN/helper_scripts/assign_fixed_chains.py --input_path=$path_for_parsed_chains --output_path=$path_for_assigned_chains --chain_list "$chains_to_design"
-python /data/lmk/ProteinMPNN/helper_scripts/make_fixed_positions_dict.py --input_path=$path_for_parsed_chains --output_path=$path_for_fixed_positions --chain_list "$chains_to_design" --position_list "$design_only_positions" --specify_non_fixed
+python /data/lmk/ProteinMPNN/helper_scripts/make_fixed_positions_dict.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/fixed_pdbs.jsonl \
+  --chain_list "A C" \
+  --position_list "1 2 3 4 5 6 7 8 23 25, 10 11 12 13 14 15 16 17 18 19 20 40"
 
 python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
-        --jsonl_path $path_for_parsed_chains \
-        --chain_id_jsonl $path_for_assigned_chains \
-        --fixed_positions_jsonl $path_for_fixed_positions \
-        --out_folder $output_dir \
-        --num_seq_per_target 2 \
-        --sampling_temp "0.1" \
-        --seed 37 \
-        --batch_size 1
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --chain_id_jsonl /data/lmk/ProteinMPNN/mpnn_outputs/assigned_pdbs.jsonl \
+  --fixed_positions_jsonl /data/lmk/ProteinMPNN/mpnn_outputs/fixed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1
 ```
 
----
+> **04 反选：只设计指定位点 -- |复合物|仅设计列出的残基|--specify_non_fixed|**
 
-### 03 Symmetry -- 对称性设计
+**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb、4YOW.pdb）；**功能**：与 03 相反，只重设计列出的少数位点，其余全部保持原样
 
-> **03.1 自定义残基绑定 -- tied_positions 协同设计**
-
-把多条链中对应残基绑定，使它们使用相同的氨基酸类型。`tied_pdbs.jsonl` 保存绑定位点 (即必须一起设计、同步变动的残基位置)，常用于对称多聚体、重复结构、功能相关位点的协同设计
+parse / assign / run 三步同 03，只在 `make_fixed_positions_dict.py` 末尾加 `--specify_non_fixed`：语义反转，`--position_list` 列出的位点变成「唯一被设计」的位点，其余全部固定
 ```bash
-folder_with_pdbs="/data/lmk/ProteinMPNN/mpnn_inputs/"
-output_dir="/data/lmk/ProteinMPNN/mpnn_outputs"
-
-path_for_parsed_chains=$output_dir"/parsed_pdbs.jsonl"
-path_for_assigned_chains=$output_dir"/assigned_pdbs.jsonl"
-path_for_fixed_positions=$output_dir"/fixed_pdbs.jsonl"
-path_for_tied_positions=$output_dir"/tied_pdbs.jsonl"
-
-chains_to_design="A C"
-
-fixed_positions="9 10 11 12 13 14 15 16 17 18 19 20 21 22 23, 10 11 18 19 20 22"
-tied_positions="1 2 3 4 5 6 7 8, 1 2 3 4 5 6 7 8"  # 指定哪些位置是绑定的，也就是必须一起设计和变动的残基，两个链中对应的残基会同步变动
-
-python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
-python /data/lmk/ProteinMPNN/helper_scripts/assign_fixed_chains.py --input_path=$path_for_parsed_chains --output_path=$path_for_assigned_chains --chain_list "$chains_to_design"
-python /data/lmk/ProteinMPNN/helper_scripts/make_fixed_positions_dict.py --input_path=$path_for_parsed_chains --output_path=$path_for_fixed_positions --chain_list "$chains_to_design" --position_list "$fixed_positions"
-python /data/lmk/ProteinMPNN/helper_scripts/make_tied_positions_dict.py --input_path=$path_for_parsed_chains --output_path=$path_for_tied_positions --chain_list "$chains_to_design" --position_list "$tied_positions"
-
-python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
-        --jsonl_path $path_for_parsed_chains \
-        --chain_id_jsonl $path_for_assigned_chains \
-        --fixed_positions_jsonl $path_for_fixed_positions \
-        --tied_positions_jsonl $path_for_tied_positions \
-        --out_folder $output_dir \
-        --num_seq_per_target 2 \
-        --sampling_temp "0.1" \
-        --seed 37 \
-        --batch_size 1
+python /data/lmk/ProteinMPNN/helper_scripts/make_fixed_positions_dict.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/fixed_pdbs.jsonl \
+  --chain_list "A C" \
+  --position_list "1 2 3 4 5 6 7 8 23 25, 10 11 12 13 14 15 16 17 18 19 20 40" \
+  --specify_non_fixed
 ```
 
-> **03.2 同源寡聚体 -- C2/C3/C4 对称设计**
+> **05 tied positions：绑定等价位点 -- |复合物|跨链位点联动|对称设计|**
 
-加 `--homooligomer 1` 直接对同源对称重复单元做对称序列生成，多条链共享序列信息
+**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb、4YOW.pdb）；**功能**：把多条链的对应位点绑定，强制它们设计成相同氨基酸（用于对称体 / 界面一致）
+
+`make_tied_positions_dict.py` 生成 `tied_pdbs.jsonl`，把不同链上对应的位点「绑定」——设计时共享同一个氨基酸决策，run 时用 `--tied_positions_jsonl`。下例把 A、B 两链的 1-8 位一一绑定
 ```bash
-folder_with_pdbs="/data/lmk/ProteinMPNN/mpnn_inputs/"
-output_dir="/data/lmk/ProteinMPNN/mpnn_outputs"
+python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl
 
-path_for_parsed_chains=$output_dir"/parsed_pdbs.jsonl"
-path_for_tied_positions=$output_dir"/tied_pdbs.jsonl"
-
-python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
-python /data/lmk/ProteinMPNN/helper_scripts/make_tied_positions_dict.py --input_path=$path_for_parsed_chains --output_path=$path_for_tied_positions --homooligomer 1
+python /data/lmk/ProteinMPNN/helper_scripts/make_tied_positions_dict.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/tied_pdbs.jsonl \
+  --chain_list "A B" \
+  --position_list "1 2 3 4 5 6 7 8, 1 2 3 4 5 6 7 8"
 
 python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
-        --jsonl_path $path_for_parsed_chains \
-        --tied_positions_jsonl $path_for_tied_positions \
-        --out_folder $output_dir \
-        --num_seq_per_target 2 \
-        --sampling_temp "0.2" \
-        --seed 37 \
-        --batch_size 1
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --tied_positions_jsonl /data/lmk/ProteinMPNN/mpnn_outputs/tied_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1
+```
+
+> **06 同源寡聚体 homooligomer -- |同源多聚体|全链对称|--homooligomer 1|**
+
+**输入**：`mpnn_inputs/` 放同源多聚体 PDB（如 4GYT.pdb、6EHB.pdb）；**功能**：自动绑定所有链的对应位点，得到各链序列完全相同的同源寡聚体
+
+对同源寡聚体（各链等长、序列应一致），`make_tied_positions_dict.py` 加 `--homooligomer 1` 自动把所有链对应位点全部绑定，输出里每条链序列完全相同
+```bash
+python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl
+
+python /data/lmk/ProteinMPNN/helper_scripts/make_tied_positions_dict.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/tied_pdbs.jsonl \
+  --homooligomer 1
+
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --tied_positions_jsonl /data/lmk/ProteinMPNN/mpnn_outputs/tied_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1
+```
+
+> **07 骨架噪声 backbone noise -- |单体|坐标加噪|--backbone_noise|**
+
+**输入**：同 01（复用 `mpnn_outputs/parsed_pdbs.jsonl`，单体骨架）；**功能**：设计前给骨架坐标加高斯噪声，增加序列多样性、对粗糙骨架更鲁棒
+
+run 时加 `--backbone_noise 0.10`（单位 Å），打分/采样前给骨架坐标加高斯噪声，提升多样性、对粗糙骨架更鲁棒（直接复用 01 的 parsed_pdbs.jsonl）
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1 \
+  --backbone_noise 0.10
+```
+
+> **08 氨基酸全局偏置 bias AA -- |单体|偏好/抑制特定 AA|--bias_AA_jsonl|**
+
+**输入**：同 01（单体骨架）；**功能**：在全局层面调整各氨基酸被选中的概率（这里整体偏好极性残基）
+
+`make_bias_AA.py` 生成全局偏置表（log 空间，正值偏好 / 负值抑制），run 时用 `--bias_AA_jsonl`。下例整体偏向极性氨基酸
+```bash
+python /data/lmk/ProteinMPNN/helper_scripts/make_bias_AA.py \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/bias_AA.jsonl \
+  --AA_list="D E H K N Q R S T W Y" \
+  --bias_list="1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39"
+
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --bias_AA_jsonl /data/lmk/ProteinMPNN/mpnn_outputs/bias_AA.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1
 ```
 
 ---
 
-### 04 Probability & Bias -- 概率输出与氨基酸偏置
+### 二、进阶参数（均在 01 基线上只加一项）
 
-> **04.1 输出无条件概率 -- 模型内部的 PSSM**
+> **09 全局排除氨基酸 -- |通用|禁用某些 AA|--omit_AAs|**
 
-加 `--unconditional_probs_only 1`，不生成确定序列，而输出每个位置上 20 个氨基酸的概率分布，可用于统计分析或后续能量计算
+**输入**：同 01（单体骨架）；**功能**：完全禁止指定氨基酸出现在任何位点（这里禁用半胱氨酸 C）
+
+`--omit_AAs` 禁止某些氨基酸出现在所有位点（默认 `"X"`）。下例禁用半胱氨酸 C，避免设计出游离巯基
 ```bash
-folder_with_pdbs="/data/lmk/ProteinMPNN/mpnn_inputs/"
-output_dir="/data/lmk/ProteinMPNN/mpnn_outputs"
-
-path_for_parsed_chains=$output_dir"/parsed_pdbs.jsonl"
-
-python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
-
 python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
-        --jsonl_path $path_for_parsed_chains \
-        --out_folder $output_dir \
-        --num_seq_per_target 1 \
-        --sampling_temp "0.1" \
-        --unconditional_probs_only 1 \
-        --seed 37 \
-        --batch_size 1
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1 \
+  --omit_AAs "C"
 ```
 
-> **04.2 氨基酸偏置 -- 鼓励或抑制特定残基**
+> **10 仅打分（不设计）-- |通用|给原始序列打分|--score_only 1|**
 
-用 `make_bias_AA.py` 生成 `bias_pdbs.jsonl`，加到模型 logits 上做加法偏置 (正数=鼓励、负数=抑制、0=不变)。`1.39 ≈ ln(4)`，相对几率提高约 4 倍。例如想全局偏好芳香族就列出 `F W Y`；想强烈抑制 C 防止二硫键就给 `-2.0` 之类的负偏置；不改动就别把该氨基酸放入列表，或给 0
+**输入**：同 01（单体骨架）；**功能**：不做设计，只给输入 PDB 自带的天然序列打分
+
+`--score_only 1` 不做设计，只对输入 PDB 自带序列算 score / global_score，结果存 `.npz`（在 `<out>/score_only/`）。用于评估天然序列或对比设计前后
 ```bash
-folder_with_pdbs="/data/lmk/ProteinMPNN/mpnn_inputs/"
-output_dir="/data/lmk/ProteinMPNN/mpnn_outputs"
-
-path_for_bias=$output_dir"/bias_pdbs.jsonl"
-path_for_parsed_chains=$output_dir"/parsed_pdbs.jsonl"
-
-AA_list="D E H K N Q R S T W Y"  # 用单字母列出要偏置的氨基酸，这里是11种: D, E, H, K, N, Q, R, S, T, W, Y
-bias_list="1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39"  # 与AA_list一一对应的偏置数值
-
-python /data/lmk/ProteinMPNN/helper_scripts/make_bias_AA.py --output_path=$path_for_bias --AA_list="$AA_list" --bias_list="$bias_list"
-python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
-
 python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
-        --jsonl_path $path_for_parsed_chains \
-        --out_folder $output_dir \
-        --bias_AA_jsonl $path_for_bias \
-        --num_seq_per_target 2 \
-        --sampling_temp "0.1" \
-        --seed 37 \
-        --batch_size 1
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --seed 37 \
+  --batch_size 1 \
+  --score_only 1
+```
+
+> **11 对外部序列打分 -- |通用|给定序列打分|--path_to_fasta|**
+
+**输入**：骨架同 01，外加 `mpnn_inputs/` 里的待评序列 `seqs_to_score.fa`；**功能**：在该骨架上给一条外部序列打分（质检验证回来的序列）
+
+配合 `--score_only 1`，用 `--path_to_fasta` 在同一 backbone 上给外部序列（如 AF2/AF3 验证回来的序列）打分。FASTA 里多链用 `/` 分隔，链顺序按字母序
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --seed 37 \
+  --batch_size 1 \
+  --score_only 1 \
+  --path_to_fasta /data/lmk/ProteinMPNN/mpnn_inputs/seqs_to_score.fa
+```
+
+> **12 soluble 模型 -- |通用|抑制表面疏水|--use_soluble_model|**
+
+**输入**：同 01（单体骨架）；**功能**：换用 soluble 权重，设计可溶蛋白时倾向减少表面疏水残基
+
+加 `--use_soluble_model` 切到只在可溶蛋白上训练的权重，设计可溶蛋白时减少暴露疏水残基（含义见 [FASTA_Format](./ProteinMPNN_FASTA_Format.md) 的 `model_name` 解码表）
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1 \
+  --use_soluble_model
+```
+
+> **13 Cα-only 模型 -- |通用|仅用 Cα 坐标|--ca_only|**
+
+**输入**：同 01（单体骨架，仅读 Cα 坐标）；**功能**：用 Cα-only 权重设计，适合骨架原子缺失或只有 Cα trace 的输入
+
+加 `--ca_only` 切到 Cα-only 权重，只读 Cα 坐标，适合骨架原子缺失或只有 Cα trace 的输入
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1 \
+  --ca_only
+```
+
+> **14 切换 vanilla 噪声档 -- |通用|挑选权重档位|--model_name|**
+
+**输入**：同 01（单体骨架）；**功能**：切换 vanilla 权重的训练噪声档位，权衡稳健性与对骨架精度的依赖
+
+`--model_name` 选 vanilla 权重档位（默认 `v_48_020`）。下例换 `v_48_002`（训练噪声 0.02 Å，依赖高精度骨架，适合晶体结构）
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1 \
+  --model_name v_48_002
+```
+
+> **15 保存每位点概率 / 打分 -- |通用|导出 npz|--save_probs / --save_score|**
+
+**输入**：同 01（单体骨架）；**功能**：设计的同时导出每位点的氨基酸概率（供保守性 / 熵分析）
+
+`--save_probs 1` 把每位点 20 种氨基酸的概率存成 `.npz`（在 `<out>/probs/`），可做位点保守性 / 熵分析；`--save_score 1` 另存逐序列 score
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1 \
+  --save_probs 1
+```
+
+> **16 条件概率分析 -- |通用|p(s_i | 骨架,其余序列)|--conditional_probs_only 1|**
+
+**输入**：同 01（单体骨架）；**功能**：不出序列，只导出「给定骨架 + 其余序列」下的逐位点条件概率
+
+`--conditional_probs_only 1` 不采样，只输出每位点在「给定骨架 + 其余序列」下的条件概率（存 `.npz`），用于分析某个位点对上下文的依赖
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --seed 37 \
+  --batch_size 1 \
+  --conditional_probs_only 1
+```
+
+> **17 无条件概率分析 -- |通用|p(s_i | 骨架)|--unconditional_probs_only 1|**
+
+**输入**：同 01（单体骨架）；**功能**：不出序列，只导出「仅给定骨架」下的逐位点无条件概率
+
+`--unconditional_probs_only 1` 一次前向就给出每位点「仅给定骨架」的无条件概率，比 16 快，适合快速看骨架本身偏好哪些氨基酸
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --seed 37 \
+  --batch_size 1 \
+  --unconditional_probs_only 1
+```
+
+> **18 单 PDB 直接输入 -- |单文件|跳过 parse|--pdb_path / --pdb_path_chains|**
+
+**输入**：`mpnn_inputs/` 里单个 PDB 文件（如 5L33.pdb，无需 parse）；**功能**：跳过解析步骤，直接对一个 PDB 设计
+
+只设计一个 PDB 时可跳过 `parse_multiple_chains.py`，用 `--pdb_path` 直接传文件、`--pdb_path_chains` 指定要设计的链（其余链固定）
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --pdb_path /data/lmk/ProteinMPNN/mpnn_inputs/5L33.pdb \
+  --pdb_path_chains "A" \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1
+```
+
+> **19 采样温度多值扫描 -- |通用|一次跑多个温度|--sampling_temp|**
+
+**输入**：同 01（单体骨架）；**功能**：一次运行在多个采样温度下各采一批序列，方便比较多样性
+
+`--sampling_temp` 接受多个空格分隔的温度，一次性在每个温度各采一批序列（温度越高越多样、置信度越低），FASTA header 里的 `T=` 会标明各自温度
+```bash
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1 0.2 0.3" \
+  --seed 37 \
+  --batch_size 1
 ```
 
 ##### [ProteinMPNN官方文档](https://github.com/dauparas/ProteinMPNN)
