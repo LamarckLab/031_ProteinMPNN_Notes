@@ -47,7 +47,7 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
 
 > **02 复合物：只设计指定链 -- |复合物|设计 A/B|固定其余链|**
 
-**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb、4YOW.pdb）；  
+**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
 **功能**：多链复合物里只重设计 A、B 链，其余链保持原序列作为固定环境
 
 加 `assign_fixed_chains.py` 生成 `assigned_pdbs.jsonl` 标记哪些链参与设计，run 时用 `--chain_id_jsonl` 传入。下例只设计 A、B 链，其余链保持原序列
@@ -73,9 +73,13 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
 
 > **03 固定指定残基位点 -- |复合物|设计 A/C|锁定部分残基|**
 
-**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb、4YOW.pdb）；**功能**：在设计链上锁住指定残基（如关键活性位点），其余位置重新设计
+**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
+**功能**：在设计链上锁住指定残基（如关键活性位点），其余位置重新设计
 
-`make_fixed_positions_dict.py` 生成 `fixed_pdbs.jsonl`，把列出的残基号锁住（保持原样，其余设计），run 时用 `--fixed_positions_jsonl`。`--position_list` 中链间用逗号分隔、链内位点用空格。下例：A 链锁 1-8/23/25，C 链锁 10-20/40
+`make_fixed_positions_dict.py` 生成 `fixed_pdbs.jsonl`，`--position_list` 中链间用逗号分隔、链内位点用空格。下例中 A 链锁 1-8/23/25，C 链锁 10-20/40
+
+> [!IMPORTANT]
+> `--position_list` 用的是 `parse_multiple_chains.py` 解析后**链内从 1 开始的顺序编号**（第几个残基），**不是 PDB 里的作者残基号**。链首编号 ≠ 1 或中间有缺失残基时，两者会错位。
 ```bash
 python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
   --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
