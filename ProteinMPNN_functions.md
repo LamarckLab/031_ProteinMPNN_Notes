@@ -27,7 +27,7 @@ export CUDA_VISIBLE_DEVICES=3
 
 ### 一、核心设计流程
 
-> **01 基础单体设计 -- |单体|全链重设计|默认参数|**
+> **01 基础单体设计**
 
 **输入**：`mpnn_inputs/` 放单体 PDB（如 5L33.pdb、6MRR.pdb）  
 **功能**：不加任何约束，固定骨架对整条链从头设计序列，每个骨架输出 5 条候选
@@ -45,10 +45,10 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **02 复合物：只设计指定链 -- |复合物|设计 A/B|固定其余链|**
+> **02 设计复合物的指定链**
 
 **输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
-**功能**：多链复合物里只重设计 A、B 链，其余链保持原序列作为固定环境
+**功能**：只重新设计多链复合物里的 A、B 链，其余链保持原序列作为固定环境
 
 加 `assign_fixed_chains.py` 生成 `assigned_pdbs.jsonl` 标记哪些链参与设计，run 时用 `--chain_id_jsonl` 传入。下例只设计 A、B 链，其余链保持原序列
 ```bash
@@ -71,7 +71,7 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **03 固定指定残基位点 -- |复合物|设计 A/C|锁定部分残基|**
+> **03 设计时锁住指定残基位点**
 
 **输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
 **功能**：在设计链上锁住指定残基（如关键活性位点），其余位置重新设计
@@ -107,25 +107,46 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --batch_size 1
 ```
 
-> **04 反选：只设计指定位点 -- |复合物|仅设计列出的残基|--specify_non_fixed|**
+> **04 只设计指定位点**
 
-**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb、4YOW.pdb）；**功能**：与 03 相反，只重设计列出的少数位点，其余全部保持原样
+**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
+**功能**：与 03 相反，只重设计列出的少数位点，其余全部保持原样
 
-parse / assign / run 三步同 03，只在 `make_fixed_positions_dict.py` 末尾加 `--specify_non_fixed`：语义反转，`--position_list` 列出的位点变成「唯一被设计」的位点，其余全部固定
+在 `make_fixed_positions_dict.py` 末尾加 `--specify_non_fixed`，`--position_list` 列出的位点变成“需要被设计的位点”，其余全部固定
 ```bash
+python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl
+
+python /data/lmk/ProteinMPNN/helper_scripts/assign_fixed_chains.py \
+  --input_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/assigned_pdbs.jsonl \
+  --chain_list "A C"
+
 python /data/lmk/ProteinMPNN/helper_scripts/make_fixed_positions_dict.py \
   --input_path=/data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
   --output_path=/data/lmk/ProteinMPNN/mpnn_outputs/fixed_pdbs.jsonl \
   --chain_list "A C" \
   --position_list "1 2 3 4 5 6 7 8 23 25, 10 11 12 13 14 15 16 17 18 19 20 40" \
   --specify_non_fixed
+
+python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
+  --jsonl_path /data/lmk/ProteinMPNN/mpnn_outputs/parsed_pdbs.jsonl \
+  --chain_id_jsonl /data/lmk/ProteinMPNN/mpnn_outputs/assigned_pdbs.jsonl \
+  --fixed_positions_jsonl /data/lmk/ProteinMPNN/mpnn_outputs/fixed_pdbs.jsonl \
+  --out_folder /data/lmk/ProteinMPNN/mpnn_outputs \
+  --num_seq_per_target 5 \
+  --sampling_temp "0.1" \
+  --seed 37 \
+  --batch_size 1
 ```
 
-> **05 tied positions：绑定等价位点 -- |复合物|跨链位点联动|对称设计|**
+> **05 tied positions：绑定等价位点**
 
-**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb、4YOW.pdb）；**功能**：把多条链的对应位点绑定，强制它们设计成相同氨基酸（用于对称体 / 界面一致）
+**输入**：`mpnn_inputs/` 放复合物 PDB（如 3HTN.pdb）  
+**功能**：把多条链的对应位点绑定，强制它们设计成相同氨基酸
 
-`make_tied_positions_dict.py` 生成 `tied_pdbs.jsonl`，把不同链上对应的位点「绑定」——设计时共享同一个氨基酸决策，run 时用 `--tied_positions_jsonl`。下例把 A、B 两链的 1-8 位一一绑定
+`make_tied_positions_dict.py` 生成 `tied_pdbs.jsonl`，把不同链上对应的位点「绑定」，run 时用 `--tied_positions_jsonl`。下例把 A、B 两链的 1-8 位两两绑定
 ```bash
 python /data/lmk/ProteinMPNN/helper_scripts/parse_multiple_chains.py \
   --input_path=/data/lmk/ProteinMPNN/mpnn_inputs \
