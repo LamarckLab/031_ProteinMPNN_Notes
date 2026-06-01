@@ -18,7 +18,7 @@
 | [ProteinMPNN_Setup.md](./ProteinMPNN_Setup.md)               | 克隆源码、conda 环境创建、PyTorch 与 NumPy 安装                 |
 | [ProteinMPNN_Functions.md](./ProteinMPNN_Functions.md)       | 各功能命令：链/位点固定、tied、同源寡聚、偏置、打分、概率导出等 |
 | [ProteinMPNN_FASTA_Format.md](./ProteinMPNN_FASTA_Format.md) | 输出 .fa 文件的字段含义（score / seq_recovery / model_name 等） |
-| [inputs/](./inputs/)                                         |                                                                 |
+| [input_data/](./input_data/)                                 | 各功能测试用的示例 PDB，按 sample 1~8 分组                      |
 
 ---
 
