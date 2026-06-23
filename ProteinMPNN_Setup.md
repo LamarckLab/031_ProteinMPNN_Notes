@@ -31,7 +31,7 @@ python protein_mpnn_run.py --help
 
 ## 05  ProteinMPNN 输入输出目录
 **236 机子路径**
-> 输入目录：/data/lmk/ProteinMPNN/mpnn_inputs
+> 输入目录：/data/lmk/ProteinMPNN/mpnn_inputs  
 > 输出目录：/data/lmk/ProteinMPNN/mpnn_outputs
 
 ##### [ProteinMPNN官方文档](https://github.com/dauparas/ProteinMPNN)
