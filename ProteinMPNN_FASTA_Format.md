@@ -17,16 +17,16 @@ MPNN 为每个输入 PDB 输出一个 `.fa` 文件（位于 `mpnn_outputs/seqs/`
 GGGGGGGGGGGGGGG...
 ```
 
-| 字段              | 含义                                                              |
-| :---------------- | :---------------------------------------------------------------- |
-| `monomer`         | 输入 PDB 文件名，同时也是这条 FASTA 的 ID                         |
-| `score`           | 模型对**输入序列**的负对数似然评分，越低代表模型越认可这条序列    |
-| `global_score`    | 全局 score，单链时等于 score；多链时为所有链 score 的长度加权平均 |
-| `fixed_chains`    | 设计时被固定（不参与重新设计）的链 ID 列表                        |
-| `designed_chains` | 设计时参与重新设计的链 ID 列表                                    |
-| `model_name`      | 使用的模型权重，含义见下方解码表                                  |
-| `git_hash`        | ProteinMPNN 仓库的 commit 哈希，用于复现                          |
-| `seed`            | 随机种子，对应 CLI 的 `--seed`                                    |
+| 字段              | 含义                                                                         |
+| :---------------- | :--------------------------------------------------------------------------- |
+| `monomer`         | 输入 PDB 文件名，同时也是这条 FASTA 的 ID                                    |
+| `score`           | 模型对**输入序列**的负对数似然，**只在可设计位点上平均**；越低代表模型越认可 |
+| `global_score`    | 同样是负对数似然，但在**复合物全部有坐标残基**上平均（含固定链）             |
+| `fixed_chains`    | 设计时被固定（不参与重新设计）的链 ID 列表                                   |
+| `designed_chains` | 设计时参与重新设计的链 ID 列表                                               |
+| `model_name`      | 使用的模型权重，含义见下方解码表                                             |
+| `git_hash`        | ProteinMPNN 仓库的 commit 哈希，用于复现                                     |
+| `seed`            | 随机种子，对应 CLI 的 `--seed`                                               |
 
 `model_name` 解码：
 
@@ -49,35 +49,33 @@ GGGGGGGGGGGGGGG...
 MEKEKIKEKLKEIREKIE...
 ```
 
-| 字段           | 含义                                                                                   |
-| :------------- | :------------------------------------------------------------------------------------- |
-| `T=0.1`        | 采样温度，对应 CLI 的 `--sampling_temp`；值越大序列越多样但置信度下降                  |
-| `sample=N`     | 该设计是第 N 个样本（N 从 1 到 `--num_seq_per_target`）                                |
-| `score`        | 模型对**这条设计序列**的负对数似然；一般会低于参考行的 score（模型更"认可"自己的设计） |
-| `global_score` | 同上，多链时为加权平均                                                                 |
-| `seq_recovery` | 与输入序列的位点重合率（0-1）                                                          |
+| 字段           | 含义                                                                                                            |
+| :------------- | :-------------------------------------------------------------------------------------------------------------- |
+| `T=0.1`        | 采样温度，对应 CLI 的 `--sampling_temp`；值越大序列越多样但置信度下降                                           |
+| `sample=N`     | 该设计是第 N 个样本（N 从 1 到 `--num_seq_per_target`）                                                         |
+| `score`        | 模型对**这条设计序列**的负对数似然，范围同 01（仅可设计位点）；一般低于参考行的 score（模型更"认可"自己的设计） |
+| `global_score` | 同 01，在复合物全部有坐标残基上平均（含固定链）                                                                 |
+| `seq_recovery` | 与输入序列的位点重合率（0-1），分母同样只数**可设计位点**，不是整个复合物                                       |
 
 ---
 
 > **03 多链复合物输出**
 
-设计多链时，**每条序列内部用 `/` 分隔不同链**，顺序与 `designed_chains` + `fixed_chains` 拼接一致：
+设计多链时，**每条序列内部用 `/` 分隔不同链**。下面是 3HTN 的真实输出（截断显示），A、B 两链参与设计，C 链固定：
 
 ```
->complex, score=1.50, global_score=1.45, fixed_chains=['C'], designed_chains=['A','B'], model_name=v_48_020, ...
-MKLLV.../GGSSA.../MFRTV...
+>3HTN, score=1.1514, global_score=1.2018, fixed_chains=['C'], designed_chains=['A', 'B'], model_name=v_48_020, git_hash=8907e667..., seed=37
+NMYSYKKIGNKYIVSINNHTEI...RTYNPDLGLNIYDFER/NMYSYKKIGNKYIVSINNHTEI...LRFFNPKXXXXDDKTFREQ...RTYNPDLGLNIYDFER
 
->T=0.1, sample=1, score=1.10, global_score=1.05, seq_recovery=0.35
-MQTTV.../GNAVS.../MFRTV...
+>T=0.1, sample=1, score=0.7382, global_score=0.9213, seq_recovery=0.5567
+NMYKYKEIGNKYIVSINNNTDL...YKYDEELGLYLLDFNK/HMYSYKKIGNKYIVSINNGQDL...LSFFDPNXXXXTTKTFNDY...VKYNEETGLYLLDFDL
 ```
-
-`fixed_chains=['C']` 表示链 C 在所有 design 行中都保持原始序列不变；只有 A、B 会被重新设计。
 
 ---
 
 > **04 同源多聚体（tied positions）输出**
 
-03.2 同源寡聚体设计 (`--homooligomer 1`) 时，多条链共享同一套残基决策，输出里所有链序列**完全相同**：
+06 同源寡聚体设计 (`--homooligomer 1`) 时，多条链共享同一套残基决策，输出里所有链序列**完全相同**：
 
 ```
 >homomer, score=1.40, global_score=1.40, fixed_chains=[], designed_chains=['A','B','C'], ...
