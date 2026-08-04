@@ -261,6 +261,9 @@ python /data/lmk/ProteinMPNN/protein_mpnn_run.py \
   --omit_AAs "C"
 ```
 
+> [!TIP]
+> **做抗体 CDR 设计时建议把 `--omit_AAs "C"` 当默认参数加上，** CDR 里多出的游离巯基会与之竞争错配，导致异构体、聚集、批次不一致。
+
 > **10 仅打分（不设计）-- |通用|给原始序列打分|--score_only 1|**
 
 **输入**：同 01（单体骨架）；**功能**：不做设计，只给输入 PDB 自带的天然序列打分
