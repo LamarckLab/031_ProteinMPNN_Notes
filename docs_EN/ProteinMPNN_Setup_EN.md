@@ -6,7 +6,7 @@
 </p>
 
 ## Lamarck &nbsp; &nbsp; &nbsp; 2025-11-01
-#### This document deploys ProteinMPNN
+#### Deploying ProteinMPNN
 ---
 
 ## 01  Cloning the official source repository
@@ -17,14 +17,14 @@ git clone https://github.com/dauparas/ProteinMPNN.git
 ```
 
 ## 02  Creating the conda environment
-> ProteinMPNN's dependencies are very light and the authors ship no yml file, so just build a clean environment yourself
+> ProteinMPNN has light dependencies and the authors provide no yml file, so create a clean environment directly
 ```bash
 conda create -n lmk_ProteinMPNN python=3.11 -y --solver=classic
 conda activate lmk_ProteinMPNN
 ```
 
 ## 03  Installing PyTorch and NumPy
-> The authors require PyTorch >= 1.8; amax runs CUDA 12.8, so the official cu126 wheel is the compatible choice
+> PyTorch >= 1.8 is required. amax runs CUDA 12.8, so the official cu126 wheel is the compatible build
 ```bash
 python -m pip install --index-url https://download.pytorch.org/whl/cu126 torch
 python -m pip install numpy

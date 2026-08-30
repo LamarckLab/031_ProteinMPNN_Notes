@@ -20,9 +20,9 @@
 | Document | Description |
 | :--- | :--- |
 | [ProteinMPNN_Setup_EN.md](./ProteinMPNN_Setup_EN.md) | Clone the source, create the conda environment, install PyTorch and NumPy |
-| [ProteinMPNN_Functions_EN.md](./ProteinMPNN_Functions_EN.md) | Command for each feature: fixed chains / positions, tied positions, homo-oligomers, bias, scoring, probability export and more |
-| [ProteinMPNN_FASTA_Format_EN.md](./ProteinMPNN_FASTA_Format_EN.md) | What the fields of the output .fa file mean (score / seq_recovery / model_name …) |
-| [input_data/](../input_data/) | Example PDBs for each feature test, grouped as sample 1~8 |
+| [ProteinMPNN_Functions_EN.md](./ProteinMPNN_Functions_EN.md) | Command reference for each feature: fixed chains and positions, tied positions, homo-oligomers, bias, scoring, probability export and more |
+| [ProteinMPNN_FASTA_Format_EN.md](./ProteinMPNN_FASTA_Format_EN.md) | Field reference for the output .fa file (score / seq_recovery / model_name …) |
+| [input_data/](../input_data/) | Example PDBs for each feature test, grouped as sample 1-8 |
 
 ---
 

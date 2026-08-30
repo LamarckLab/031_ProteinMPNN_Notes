@@ -6,12 +6,12 @@
 </p>
 
 ## Lamarck &nbsp; &nbsp; &nbsp; 2025-11-01
-#### This document explains the fields of the .fa file ProteinMPNN writes
+#### Field reference for the .fa file written by ProteinMPNN
 ---
 
 > **00 Basic FASTA structure**
 
-MPNN writes one `.fa` file per input PDB (under `mpnn_outputs/seqs/`), holding a number of (header, sequence) pairs:
+MPNN writes one `.fa` file per input PDB, under `mpnn_outputs/seqs/`, containing a series of (header, sequence) pairs:
 - **The 1st record**: the original sequence of the input PDB (the reference line)
 - **From the 2nd record on**: the new sequences the model designed (as many as `--num_seq_per_target`)
 
@@ -27,7 +27,7 @@ GGGGGGGGGGGGGGG...
 | Field | Meaning |
 | :--- | :--- |
 | `monomer` | the input PDB filename, which is also the ID of this FASTA record |
-| `score` | the model's negative log-likelihood of the **input sequence**, **averaged over the designable positions only**; lower means the model likes it more |
+| `score` | the model's negative log-likelihood of the **input sequence**, **averaged over the designable positions only**; lower values indicate stronger agreement from the model |
 | `global_score` | the same negative log-likelihood, but averaged over **every residue with coordinates in the complex** (fixed chains included) |
 | `fixed_chains` | the IDs of the chains held fixed (not redesigned) |
 | `designed_chains` | the IDs of the chains that were redesigned |
@@ -42,10 +42,10 @@ Decoding `model_name`:
 | `v_48_020` | vanilla model, k-NN=48, 0.20 Å backbone noise during training (**the default**, the most robust, and forgiving of rough backbones such as RFdiffusion output) |
 | `v_48_010` | vanilla model, k-NN=48, 0.10 Å training noise |
 | `v_48_002` | vanilla model, k-NN=48, 0.02 Å training noise (depends more on backbone accuracy, suited to crystal structures) |
-| `s_48_020` | soluble model, penalises surface hydrophobic residues, suited to soluble protein design |
+| `s_48_020` | soluble model, penalizes surface hydrophobic residues, suited to soluble protein design |
 | `c_48_020` | Cα-only model, uses Cα coordinates alone, suited to inputs missing backbone atoms or holding only Cα |
 
-> In the example above, `score=1.3597` is the score of the input sequence — this is a poly-G backbone (from RFdiffusion output), and the model naturally does not think much of an all-G sequence, so the score is on the high side.
+> In the example above, `score=1.3597` is the score of the input sequence. This is a poly-G backbone taken from RFdiffusion output, and the model naturally assigns a low likelihood to an all-G sequence, so the score is high.
 
 ---
 
@@ -60,15 +60,15 @@ MEKEKIKEKLKEIREKIE...
 | :--- | :--- |
 | `T=0.1` | the sampling temperature, matching `--sampling_temp` on the CLI; higher values give more diverse sequences but lower confidence |
 | `sample=N` | this design is the Nth sample (N runs from 1 to `--num_seq_per_target`) |
-| `score` | the model's negative log-likelihood of **this designed sequence**, over the same range as in 01 (designable positions only); usually lower than the reference line's score (the model "likes" its own design better) |
+| `score` | the model's negative log-likelihood of **this designed sequence**, over the same range as in 01 (designable positions only); usually lower than the score of the reference line, since the model assigns a higher likelihood to its own design |
 | `global_score` | as in 01, averaged over every residue with coordinates in the complex (fixed chains included) |
-| `seq_recovery` | how often the design matches the input sequence per position (0-1); the denominator again counts **designable positions only**, not the whole complex |
+| `seq_recovery` | the fraction of positions at which the design matches the input sequence (0-1); the denominator again counts **designable positions only**, not the whole complex |
 
 ---
 
 > **03 Multi-chain complex output**
 
-When several chains are designed, **`/` separates the chains inside each sequence**. Below is real 3HTN output (truncated), with chains A and B designed and chain C fixed:
+When several chains are designed, **`/` separates the chains within each sequence**. The example below is real 3HTN output, truncated, with chains A and B designed and chain C fixed:
 
 ```
 >3HTN, score=1.1514, global_score=1.2018, fixed_chains=['C'], designed_chains=['A', 'B'], model_name=v_48_020, git_hash=8907e667..., seed=37
@@ -82,7 +82,7 @@ NMYKYKEIGNKYIVSINNNTDL...YKYDEELGLYLLDFNK/HMYSYKKIGNKYIVSINNGQDL...LSFFDPNXXXXTT
 
 > **04 Homo-oligomer (tied positions) output**
 
-In the homo-oligomer design of 06 (`--homooligomer 1`) the chains share one set of residue decisions, so every chain in the output carries **exactly the same** sequence:
+In the homo-oligomer design of 06 (`--homooligomer 1`) the chains share a single set of residue decisions, so every chain in the output carries **exactly the same** sequence:
 
 ```
 >homomer, score=1.40, global_score=1.40, fixed_chains=[], designed_chains=['A','B','C'], ...
