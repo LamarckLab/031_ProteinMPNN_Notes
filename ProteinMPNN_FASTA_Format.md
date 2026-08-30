@@ -1,3 +1,10 @@
+<p align="left">
+  <a href="./README.md">首页</a>
+</p>
+<p align="right">
+  <a href="./docs_EN/ProteinMPNN_FASTA_Format_EN.md">English</a> | <strong>中文</strong>
+</p>
+
 ## Lamarck &nbsp; &nbsp; &nbsp; 2025-11-01
 #### 该文档用于展示 ProteinMPNN 输出 .fa 文件的字段含义
 ---

@@ -1,3 +1,7 @@
+<p align="right">
+  <a href="./docs_EN/README_EN.md">English</a> | <strong>中文</strong>
+</p>
+
 <h1 align="center">🧬 ProteinMPNN 部署与功能测试笔记</h1>
 
 <p align="center"><em>—— 2025.11.01</em></p>

@@ -1,3 +1,10 @@
+<p align="left">
+  <a href="./README.md">首页</a>
+</p>
+<p align="right">
+  <a href="./docs_EN/ProteinMPNN_Functions_EN.md">English</a> | <strong>中文</strong>
+</p>
+
 ## Lamarck &nbsp; &nbsp; &nbsp; 2025-10-30
 #### 该文档用于记录 server 上跑 ProteinMPNN 的命令
 ---
